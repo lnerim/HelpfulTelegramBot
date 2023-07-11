@@ -2,8 +2,12 @@ import os
 import asyncio
 import logging
 from time import time
+
 from aiogram import Bot, Dispatcher
-from aiogram.types import Message, ChatType, ChatMemberUpdated, ChatMemberStatus, ChatMember
+from aiogram.types import Message, ChatType, ChatMemberUpdated, User
+from aiogram.types import ChatMemberStatus, ChatMember, ContentType
+from aiogram.utils.exceptions import MessageCantBeDeleted
+
 from bot_db import BotDataBase
 from bot_time import *
 
@@ -38,18 +42,29 @@ async def cmd_help(message: Message):
 
 
 @dp.message_handler(chat_type=[ChatType.GROUP, ChatType.SUPERGROUP], commands=["new_task", "mydailywork"])
-@dp.message_handler(chat_type=[ChatType.GROUP, ChatType.SUPERGROUP], hashtags=["new_task", "mydailywork"])
+@dp.message_handler(chat_type=[ChatType.GROUP, ChatType.SUPERGROUP],
+                    content_types=ContentType.ANY, hashtags=["new_task", "mydailywork"])
 async def create_task(message: Message):
     logging.info(message)
+    # Сразу откидываем ботов
     if message.from_user.is_bot:
         return
 
-    text = message.text
+    # Если есть вложения, то
+    if message.content_type == ContentType.TEXT:
+        text = message.text
+    else:
+        text = message.caption
+        if text is None:
+            return
+
+    me: User = await bot.get_me()
     keys = (
         "/new_task",
         "/mydailywork",
         "#new_task",
-        "#mydailywork"
+        "#mydailywork",
+        f"@{me.username}"  # Имя бота, чтобы обращаться в чате через /command@bot_name
     )
 
     if not text.startswith(keys):
@@ -91,16 +106,34 @@ async def create_task(message: Message):
 
     # Проверка на имя пользователя, т.к. не у всех есть
     if message.from_user.username is not None:
-        user = f"<a href=\"t.me/{message.from_user.username}\">{message.from_user.full_name}</a>\n"
+        user = f"<a href=\"t.me/{message.from_user.username}\">{message.from_user.full_name}</a>"
     else:
         user = message.from_user.full_name
 
-    await message.answer(
-        user + " выполнил задание!\n\n" +
-        text + "\n" +
-        "#task",
-        parse_mode="HTML"
-    )
+    answer_text = f"{user} выполнил задание!\n\n" \
+                  f"{text}\n" \
+                  f"#task"
+
+    # Если во вложении фото, то отправляем его
+    if message.photo:
+        await message.answer_photo(
+            photo=message.photo[0].file_id,
+            caption=answer_text,
+            parse_mode="HTML"
+        )
+    else:
+        await message.answer(
+            answer_text,
+            parse_mode="HTML",
+            disable_web_page_preview=True
+        )
+    try:
+        # Если другое вложение, то не удаляем
+        # Также другие вложения остаются
+        if message.content_type in (ContentType.TEXT, ContentType.PHOTO):
+            await message.delete()
+    except MessageCantBeDeleted:
+        logging.warning(f"Сообщение {message.message_id} из чата {message.chat.id} не удалилось!")
 
 
 @dp.my_chat_member_handler()
@@ -140,7 +173,7 @@ async def every_day():
                     group_id=group_id,
                     t_start=day.day_start,
                     t_end=day.day_end,
-                    desc="неделю"
+                    desc="день"
                 ))
 
 
@@ -165,7 +198,9 @@ async def every_week():
 
 
 async def group_sender(users, group_id, t_start, t_end, desc=None):
+    logging.info(f"Группа {group_id} получает рассылку за {desc}")
     text = f"Список активностей за {desc}\n"
+    data = []
     for user_id in users:
         tasks = db.tasks_by_time(
             user_id=user_id,
@@ -177,7 +212,14 @@ async def group_sender(users, group_id, t_start, t_end, desc=None):
         sum_value = sum(i[4] for i in tasks)
         member: ChatMember = await bot.get_chat_member(group_id, user_id)
         full_name = member.user.full_name
-        text += f" * {full_name} - {sum_value} б.\n"
+
+        data.append(
+            (sum_value, full_name)
+        )
+
+    data.sort(reverse=True)
+    for elem in data:
+        text += f" * {elem[1]} - {elem[0]} б.\n"
     await bot.send_message(group_id, text)
 
 

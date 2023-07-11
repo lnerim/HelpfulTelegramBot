@@ -98,7 +98,6 @@ class BotDataBase:
                 f"SELECT * FROM `{TABLE_USERS}` WHERE `{USER_ID}` = ? AND `{USER_GROUP}` = ?",
                 (user_id, group_id)
             ).fetchone()
-            print(result)
             if not result:
                 self.cursor.execute(
                     f"INSERT INTO `{TABLE_USERS}` (`{USER_ID}`, `{USER_GROUP}`) VALUES(?,?)", (user_id, group_id)
