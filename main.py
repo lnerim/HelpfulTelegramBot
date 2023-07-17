@@ -1,11 +1,11 @@
-import os
 import asyncio
 import logging
+import os
 from time import time
 
 from aiogram import Bot, Dispatcher
-from aiogram.types import Message, ChatType, ChatMemberUpdated, User
 from aiogram.types import ChatMemberStatus, ChatMember, ContentType
+from aiogram.types import Message, ChatType, ChatMemberUpdated, User
 from aiogram.utils.exceptions import MessageCantBeDeleted
 
 from bot_db import BotDataBase
@@ -45,7 +45,7 @@ async def cmd_help(message: Message):
 @dp.message_handler(chat_type=[ChatType.GROUP, ChatType.SUPERGROUP],
                     content_types=ContentType.ANY, hashtags=["new_task", "mydailywork"])
 async def create_task(message: Message):
-    logging.info(message)
+    logging.debug(message)
     # Сразу откидываем ботов
     if message.from_user.is_bot:
         return
@@ -102,7 +102,7 @@ async def create_task(message: Message):
         description=text,
         time=time()
     )
-    logging.info(f"Создано задание от {message.from_user.id} в группе {message.chat.id}: {text}")
+    logging.debug(f"Создано задание от {message.from_user.id} в группе {message.chat.id}: {text}")
 
     # Проверка на имя пользователя, т.к. не у всех есть
     if message.from_user.username is not None:
@@ -136,6 +136,21 @@ async def create_task(message: Message):
         logging.warning(f"Сообщение {message.message_id} из чата {message.chat.id} не удалилось!")
 
 
+@dp.message_handler(chat_type=[ChatType.GROUP, ChatType.SUPERGROUP], commands=["status"])
+async def cmd_status(message: Message):
+    db.user_remember(message.from_user.id, message.chat.id)
+
+    day: Time = calculate_new_day()
+    week: Time = calculate_new_week()
+
+    value_day = db.value_by_time(message.from_user.id, message.chat.id, day.start, day.end)
+    value_week = db.value_by_time(message.from_user.id, message.chat.id, week.start, week.end)
+
+    await message.reply("Статистика полученных баллов:\n"
+                        f"За день: {value_day}\n"
+                        f"За неделю: {value_week}\n")
+
+
 @dp.my_chat_member_handler()
 async def chat_update(update: ChatMemberUpdated):
     if update.new_chat_member.status == ChatMemberStatus.MEMBER:
@@ -157,10 +172,10 @@ async def start_bot():
     await dp.start_polling(bot)
 
 
-async def every_day():
+async def every_time(calc_time, desc: str):
     while True:
-        day: Day = calculate_new_day()
-        await asyncio.sleep(day.sleep)
+        t: Time = calc_time()
+        await asyncio.sleep(t.sleep)
         groups = db.groups_by_status(status=True)
 
         async with asyncio.TaskGroup() as tg:
@@ -171,29 +186,9 @@ async def every_day():
                 tg.create_task(group_sender(
                     users=users,
                     group_id=group_id,
-                    t_start=day.day_start,
-                    t_end=day.day_end,
-                    desc="день"
-                ))
-
-
-async def every_week():
-    while True:
-        week: Week = calculate_new_week()
-        await asyncio.sleep(week.sleep)
-        groups = db.groups_by_status(status=True)
-
-        async with asyncio.TaskGroup() as tg:
-            for group in groups:
-                group_id = group[1]
-                users = db.users_by_group(group_id)
-
-                tg.create_task(group_sender(
-                    users=users,
-                    group_id=group_id,
-                    t_start=week.week_start,
-                    t_end=week.week_end,
-                    desc="неделю"
+                    t_start=t.start,
+                    t_end=t.end,
+                    desc=desc
                 ))
 
 
@@ -202,19 +197,17 @@ async def group_sender(users, group_id, t_start, t_end, desc=None):
     text = f"Список активностей за {desc}\n"
     data = []
     for user_id in users:
-        tasks = db.tasks_by_time(
+        value = db.value_by_time(
             user_id=user_id,
             group_id=group_id,
             time_start=t_start,
             time_end=t_end
         )
-        # value - 4 индекс
-        sum_value = sum(i[4] for i in tasks)
         member: ChatMember = await bot.get_chat_member(group_id, user_id)
         full_name = member.user.full_name
 
         data.append(
-            (sum_value, full_name)
+            (value, full_name)
         )
 
     data.sort(reverse=True)
@@ -224,9 +217,10 @@ async def group_sender(users, group_id, t_start, t_end, desc=None):
 
 
 async def main():
+    logging.info("Бот запущен!")
     async with asyncio.TaskGroup() as tg:
-        tg.create_task(every_day())
-        tg.create_task(every_week())
+        tg.create_task(every_time(calculate_new_day, "день"))
+        tg.create_task(every_time(calculate_new_week, "неделю"))
         tg.create_task(start_bot())
 
 

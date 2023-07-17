@@ -84,6 +84,7 @@ class BotDataBase:
                 f"UPDATE `{TABLE_TASKS}` SET `{TASK_VALUE}` = ? WHERE `{TASK_NUM}` = ?", (value, task_id)
             )
 
+    # Возможно больше не будет нужно
     def tasks_by_time(self, user_id, group_id, time_start, time_end):
         with self.connection:
             return self.cursor.execute(
@@ -91,6 +92,17 @@ class BotDataBase:
                 f"`{TASK_TIME}` >= ? AND `{TASK_TIME}` < ?",
                 (user_id, group_id, time_start, time_end)
             ).fetchall()
+
+    def value_by_time(self, user_id, group_id, time_start, time_end):
+        with self.connection:
+            result = self.cursor.execute(
+                f"SELECT SUM({TASK_VALUE}) FROM `{TABLE_TASKS}` "
+                f"WHERE `{TASK_USER_ID}` = ? AND `{TASK_GROUP_ID}` = ? AND "
+                f"`{TASK_TIME}` >= ? AND `{TASK_TIME}` < ?",
+                (user_id, group_id, time_start, time_end)
+            ).fetchone()
+        result = result[0]
+        return result if result is not None else 0
 
     def user_remember(self, user_id, group_id):
         with self.connection:
