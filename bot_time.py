@@ -24,13 +24,13 @@ def calculate_new_day() -> Time:
 
 
 def calculate_new_week() -> Time:
-    week_day = dt.now().weekday() + 1  # Datetime: 0 - Понедельник, 6 - Воскресенье
+    week_day = dt.now().weekday()  # Datetime: 0 - Понедельник, 6 - Воскресенье
     day = 86400  # Время суток в секундах
     week = 604800  # Время недели в секундах
 
     time_now: float = dt.now().timestamp()
-    t0: float = time_now % (day * week_day)  # Время в секундах с начала недели
-    time_start: float = time_now - t0  # Время в секундах начала недели
+    t0_day: float = time_now - time_now % day  # Время в секундах начала суток
+    time_start: float = t0_day - (day * week_day)  # Время в секундах начала недели
 
     return Time(
         start=time_start,
@@ -40,5 +40,5 @@ def calculate_new_week() -> Time:
 
 
 if __name__ == "__main__":
-    print(calculate_new_day())
-    print(calculate_new_week())
+    print("День: ", calculate_new_day())
+    print("Неделя: ", calculate_new_week())
