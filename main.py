@@ -72,7 +72,7 @@ async def cmd_help(message: Message):
 
 @dp.message(Command(commands=["new_task", "mydailywork"]), ChatTypeFilter([ChatType.GROUP, ChatType.SUPERGROUP]))
 @dp.message(ChatTypeFilter([ChatType.GROUP, ChatType.SUPERGROUP]),
-            F.content_type.in_([ContentType.TEXT, ContentType.PHOTO, ContentType.VIDEO]),
+            F.content_type.in_([ContentType.TEXT, ContentType.PHOTO, ContentType.VIDEO, ContentType.DOCUMENT]),
             HashtagFilter(["new_task", "mydailywork"]))
 async def create_task(message: Message):
     logging.debug(message)
@@ -80,13 +80,7 @@ async def create_task(message: Message):
     if message.from_user.is_bot:
         return
 
-    # Если есть вложения, то
-    if message.content_type == ContentType.TEXT:
-        text = message.text
-    else:
-        text = message.caption
-        if text is None:
-            return
+    text = message.html_text
 
     me: User = await bot.get_me()
     keys = (
@@ -109,7 +103,11 @@ async def create_task(message: Message):
 
     for stoke in keys:
         text = text.replace(stoke, "")
-    text = text[1:]  # Обрезаем первый пробел после команды или хештега
+
+    c = 0
+    while text[c] == " ":
+        c += 1
+    text = text[c:]  # Обрезаем первые пробелы после команды или хештега
 
     if text.isspace() or not text:
         await message.answer(
