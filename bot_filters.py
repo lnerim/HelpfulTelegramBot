@@ -21,12 +21,9 @@ class HashtagFilter(BaseFilter):
         self.hashtags = hashtags
 
     async def __call__(self, message: Message) -> bool:
-        if message.content_type == ContentType.TEXT:
-            text = message.text
-        else:
-            text = message.caption
-
-        if isinstance(self.hashtags, str):
+        if (text := message.html_text) is None:
+            return False
+        elif isinstance(self.hashtags, str):
             return "#" + self.hashtags in text
         else:
             for hashtag in self.hashtags:
