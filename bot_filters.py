@@ -1,6 +1,5 @@
 from typing import Union
 
-from aiogram.enums import ContentType
 from aiogram.filters import BaseFilter
 from aiogram.types import Message
 

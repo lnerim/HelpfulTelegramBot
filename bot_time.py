@@ -57,4 +57,4 @@ def calculate_day_timer(hours: int, minutes: int) -> Time:
 if __name__ == "__main__":
     print("День: ", calculate_new_day())
     print("Неделя: ", calculate_new_week())
-    print("Сегодня 12:24: ", calculate_day_timer(12, 24))
+    print("Следующее 12:24: ", calculate_day_timer(12, 24))
