@@ -18,7 +18,7 @@ from bot_filters import ChatTypeFilter, HashtagFilter
 
 TOKEN = os.environ["TOKEN"]
 logging.basicConfig(
-    level=logging.DEBUG,
+    level=logging.INFO,
     # filename='bot.log',
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
@@ -131,11 +131,7 @@ async def create_task(message: Message):
         time=task[1]
     )
 
-    # Проверка на имя пользователя, т.к. не у всех есть
-    if message.from_user.username is not None:
-        user = f"<a href=\"t.me/{message.from_user.username}\">{message.from_user.full_name}</a>"
-    else:
-        user = message.from_user.full_name
+    user = f"<a href='tg://user?id={message.from_user.id}'>{message.from_user.full_name}</a>"
 
     answer_text = f"{user} выполнил задание!\n\n" \
                   f"{text}\n" \
@@ -259,19 +255,24 @@ async def group_sender(users: tuple, group_id: int, t_start: float, t_end: float
             }
         )
 
+    if not data:
+        return
+
     data = sorted(data, key=lambda x: x["value"], reverse=True)
     data_good, data_bad = cut_list_dicts(data, "value", rate)
     del data
 
     if data_good:
-        top = 0
+        top = -1  # Значение точно станет нулём при первой итерации
+        remember = 0  # Число точно не встречается
         emoji = ["🥇", "🥈", "🥉", "🎖️"]
         text_good = f"Список активностей за {desc}\n"
         for elem in data_good:
             # Пример: " 🥇 Иван - 10 б."
-            text_good += f" {emoji[top]} <a href='tg://user?id={elem['id']}'>{elem['name']}</a> - {elem['value']} б.\n"
-            if top < len(emoji) - 1:
+            if (top < len(emoji) - 1) and (remember != elem["value"]):
                 top += 1
+            text_good += f" {emoji[top]} <a href='tg://user?id={elem['id']}'>{elem['name']}</a> - {elem['value']} б.\n"
+            remember = elem["value"]
 
         await bot.send_message(group_id, text_good, parse_mode="HTML")
 

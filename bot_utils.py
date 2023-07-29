@@ -28,9 +28,7 @@ def convert_message(text: str, keys: tuple[str]) -> str:
 def cut_list_dicts(arr: list, key: str, rate: int) -> (list, list):
     # Должно работать ТОЛЬКО при отсортированном списке
     n = len(arr)
-    list1 = []
     for i in range(n):
         if arr[i][key] < rate:
-            list2 = arr[i:]
-            return list1, list2
-        list1.append(arr[i])
+            return arr[:i], arr[i:]
+    return arr, []
