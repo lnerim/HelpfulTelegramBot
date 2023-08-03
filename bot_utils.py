@@ -7,6 +7,11 @@ class TaskData(CallbackData, prefix="rep"):
     time: float
 
 
+class DeleteTaskData(CallbackData, prefix="delete"):
+    num: int
+    user_id: int
+
+
 def convert_message(text: str, keys: tuple[str]) -> str:
     if not text.startswith(keys):
         raise SyntaxError("Некорректно использовано ключевое слово!")

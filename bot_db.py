@@ -94,7 +94,19 @@ class BotDataBase:
                 (value, task_id)
             )
 
-    # Возможно больше не будет нужно
+    def task_get(self, num) -> tuple | None:
+        with self.connection:
+            return self.cursor.execute(
+                f"SELECT * FROM `{TABLE_TASKS}` WHERE `{TASK_NUM}` = ?",
+                (num,)
+            ).fetchone()
+
+    def task_delete(self, num):
+        with self.connection:
+            self.cursor.execute(
+                f"DELETE FROM `{TABLE_TASKS}` WHERE `{TASK_NUM}` = ?", (num,)
+            )
+
     def tasks_by_time(self, user_id, group_id, time_start, time_end) -> list[Any]:
         with self.connection:
             return self.cursor.execute(
