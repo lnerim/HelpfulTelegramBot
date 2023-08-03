@@ -194,7 +194,7 @@ async def cmd_delete(message: Message):
 
     builder = InlineKeyboardBuilder()
     for task in tasks:
-        del_task_data = TaskData(
+        del_task_data = DeleteTaskData(
             num=task[0],
             user_id=task[1]
         )
@@ -204,10 +204,14 @@ async def cmd_delete(message: Message):
         )
         builder.row(btn)
 
-    await message.answer(
+    new_message = await message.answer(
         text="Нажмите на кнопку с заданием, чтобы удалить его",
         reply_markup=builder.as_markup()
     )
+
+    await asyncio.sleep(5*60)
+    await message.delete()
+    await new_message.delete()
 
 
 @dp.my_chat_member
@@ -236,7 +240,9 @@ async def callback_rep(callback: CallbackQuery):
         await callback.answer("Нельзя изменить свой рейтинг!")
         return
 
-    # TODO Добавить проверку на существование задания
+    if db.task_get(data.num) is None:
+        await callback.answer("Не существует такого задания!")
+        return
 
     exist_rep: bool = db.rep_check(data.num, user_id)
     if exist_rep:
@@ -251,8 +257,14 @@ async def callback_rep(callback: CallbackQuery):
 
 @dp.callback_query(DeleteTaskData.filter())
 async def callback_delete(callback: CallbackQuery):
-    # TODO Добавить проверку на существование задания
     del_data: DeleteTaskData = DeleteTaskData.unpack(callback.data)
+
+    if db.task_get(del_data.num) is None:
+        await callback.answer("Не существует такого задания!")
+        return
+
+    db.task_delete(del_data.num)
+    await callback.answer("Задание удалено!")
 
 
 async def every_time(calc_time: callable, desc: str, rate: int):
