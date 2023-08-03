@@ -7,12 +7,12 @@ from aiogram import Bot, Dispatcher, F
 from aiogram.enums.chat_type import ChatType
 from aiogram.types import ChatMemberMember, ContentType, CallbackQuery
 from aiogram.types import Message, ChatMemberUpdated, User
-from aiogram.utils.keyboard import InlineKeyboardBuilder
+from aiogram.utils.keyboard import InlineKeyboardBuilder, InlineKeyboardButton
 from aiogram.filters import Command
 
 from bot_db import BotDataBase
 from bot_time import *
-from bot_utils import TaskData, convert_message, cut_list_dicts
+from bot_utils import TaskData, convert_message, cut_list_dicts, DeleteTaskData
 from bot_filters import ChatTypeFilter, HashtagFilter
 
 
@@ -164,7 +164,7 @@ async def create_task(message: Message):
     # Также другие вложения остаются
     if message.content_type in (ContentType.TEXT, ContentType.PHOTO):
         result: bool = await message.delete()
-        logging.warning(f"Сообщение {message.message_id} из чата {message.chat.id} не удалилось!") if result else None
+        logging.warning(f"Сообщение {message.message_id} из чата {message.chat.id} не удалено!") if not result else ...
 
 
 @dp.message(Command(commands=["status"]), ChatTypeFilter([ChatType.GROUP, ChatType.SUPERGROUP]))
@@ -180,6 +180,34 @@ async def cmd_status(message: Message):
     await message.reply("Статистика полученных баллов:\n"
                         f"За день: {value_day}\n"
                         f"За неделю: {value_week}\n")
+
+
+@dp.message(Command(commands="delete"), ChatTypeFilter([ChatType.GROUP, ChatType.SUPERGROUP]))
+async def cmd_delete(message: Message):
+    day: Time = calculate_new_day()
+    # num, user_id, group_id, desc, value, time
+    tasks: list[tuple | None] = db.tasks_by_time(message.from_user.id, message.chat.id, day.start, day.end)
+
+    if not tasks:
+        await message.answer("Увы, но у Вас нет выполненных заданий за день!")
+        return
+
+    builder = InlineKeyboardBuilder()
+    for task in tasks:
+        del_task_data = TaskData(
+            num=task[0],
+            user_id=task[1]
+        )
+        btn = InlineKeyboardButton(
+            text=task[3],
+            callback_data=del_task_data.pack()
+        )
+        builder.row(btn)
+
+    await message.answer(
+        text="Нажмите на кнопку с заданием, чтобы удалить его",
+        reply_markup=builder.as_markup()
+    )
 
 
 @dp.my_chat_member
@@ -204,9 +232,11 @@ async def callback_rep(callback: CallbackQuery):
     data: TaskData = TaskData.unpack(callback.data)
     user_id = callback.from_user.id
 
-    if callback.from_user.id == data.user_id:
+    if user_id == data.user_id:
         await callback.answer("Нельзя изменить свой рейтинг!")
         return
+
+    # TODO Добавить проверку на существование задания
 
     exist_rep: bool = db.rep_check(data.num, user_id)
     if exist_rep:
@@ -219,8 +249,10 @@ async def callback_rep(callback: CallbackQuery):
         await callback.answer("Вы повысили рейтинг задания!")
 
 
-async def start_bot():
-    await dp.start_polling(bot)
+@dp.callback_query(DeleteTaskData.filter())
+async def callback_delete(callback: CallbackQuery):
+    # TODO Добавить проверку на существование задания
+    del_data: DeleteTaskData = DeleteTaskData.unpack(callback.data)
 
 
 async def every_time(calc_time: callable, desc: str, rate: int):
@@ -268,7 +300,7 @@ async def group_sender(users: tuple, group_id: int, t_start: float, t_end: float
         emoji = ["🥇", "🥈", "🥉", "🎖️"]
         text_good = f"Список активностей за {desc}\n"
         for elem in data_good:
-            # Пример: " 🥇 Иван - 10 б."
+            # Пример: 🥇 Иван - 10 б.
             if (top < len(emoji) - 1) and (remember != elem["value"]):
                 top += 1
             text_good += f" {emoji[top]} <a href='tg://user?id={elem['id']}'>{elem['name']}</a> - {elem['value']} б.\n"
@@ -290,7 +322,7 @@ async def main():
     async with asyncio.TaskGroup() as tg:
         tg.create_task(every_time(calculate_new_day, "день", 1))
         tg.create_task(every_time(calculate_new_week, "неделю", 7))
-        tg.create_task(start_bot())
+        tg.create_task(dp.start_polling(bot))
 
 
 if __name__ == "__main__":
