@@ -5,7 +5,7 @@ from time import time
 
 from aiogram import Bot, Dispatcher, F
 from aiogram.enums.chat_type import ChatType
-from aiogram.types import ChatMemberMember, ContentType, CallbackQuery
+from aiogram.types import ChatMemberMember, ContentType, CallbackQuery, BotCommand
 from aiogram.types import Message, ChatMemberUpdated, User
 from aiogram.utils.keyboard import InlineKeyboardBuilder, InlineKeyboardButton
 from aiogram.filters import Command
@@ -329,8 +329,19 @@ async def group_sender(users: tuple, group_id: int, t_start: float, t_end: float
         await bot.send_message(group_id, text_bad + lazybones, parse_mode="HTML")
 
 
+async def set_commands():
+    await bot.set_my_commands(commands=[
+        BotCommand(command="start", description="Запустить бота"),
+        BotCommand(command="help", description="Помощь по боту"),
+        BotCommand(command="new_task", description="Выполнение задания"),
+        BotCommand(command="status", description="Статус за день/неделю"),
+        BotCommand(command="delete", description="Удаление заданий"),
+    ])
+
+
 async def main():
     logging.info("Бот запущен!")
+    await set_commands()
     async with asyncio.TaskGroup() as tg:
         tg.create_task(every_time(calculate_new_day, "день", 1))
         tg.create_task(every_time(calculate_new_week, "неделю", 7))
