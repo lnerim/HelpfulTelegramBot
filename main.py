@@ -242,6 +242,15 @@ async def cmd_vacation_status(message: Message):
         await message.answer(f"У Вас осталось {status} дня(ей) до конца отпуска!")
 
 
+@dp.message(Command("vacation_delete"), ChatTypeFilter([ChatType.GROUP, ChatType.SUPERGROUP]))
+async def cmd_vacation_delete(message: Message):
+    if db.vacation_status(message.from_user.id, message.chat.id) is None:
+        await message.answer("У Вас нет сейчас активного отпуска!")
+    else:
+        db.vacation_delete(message.from_user.id, message.chat.id)
+        await message.answer(f"Отпуск спешно завершён!")
+
+
 @dp.my_chat_member
 async def chat_update(update: ChatMemberUpdated):
     if update.new_chat_member.status == ChatMemberMember.MEMBER:
@@ -372,6 +381,7 @@ async def set_commands():
         BotCommand(command="delete", description="Удаление заданий"),
         BotCommand(command="vacation_add", description="Создать отпуск"),
         BotCommand(command="vacation_status", description="Статус отпуска"),
+        BotCommand(command="vacation_delete", description="Досрочное завершение отпуска"),
     ])
 
 

@@ -204,6 +204,13 @@ class BotDataBase:
                 (group_id,)
             )
 
+    def vacation_delete(self, user_id: int, group_id: int):
+        with self.connection:
+            self.cursor.execute(
+                f"DELETE FROM `{TABLE_VACATION}` WHERE `{VACATION_USER_ID}` = ? AND `{VACATION_GROUP_ID}` = ?",
+                (user_id, group_id)
+            )
+
     def vacation_status(self, user_id: int, group_id: int) -> int | None:
         with self.connection:
             result = self.cursor.execute(
