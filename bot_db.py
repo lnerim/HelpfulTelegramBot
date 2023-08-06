@@ -174,6 +174,9 @@ class BotDataBase:
                 f"DELETE FROM `{TABLE_REP}` WHERE `{REP_NUM_TASK}` = ? AND `{REP_USER_ID}` = ?", (num_task, user_id)
             )
 
+    def vacation_active(self):
+        ...
+
     def vacation_add(self, user_id: int, group_id: int, days: int) -> tuple[bool, int]:
         # True -- добавлено, False - уже существует
         if (status := self.vacation_status(user_id, group_id)) is None:

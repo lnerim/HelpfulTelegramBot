@@ -214,6 +214,30 @@ async def cmd_delete(message: Message):
     await new_message.delete()
 
 
+@dp.message(Command(commands="vacation_add"), ChatTypeFilter([ChatType.GROUP, ChatType.SUPERGROUP]))
+async def cmd_vacation_add(message: Message):
+    text: list[str] = message.text.split(" ")
+    if len(text) != 2 or not text[1].isdigit() or (days := int(text[1])) <= 0:
+        await message.answer("Некорректный синтаксис.\nНужно:\n"
+                             "/vacation_add <дни отпуска>\n"
+                             "Где дни следует указывать в целых числах")
+        return
+
+    result = db.vacation_add(message.from_user.id, message.chat.id, days)
+    if result[0]:
+        await message.answer(f"Отпуск спешно создан, наслаждайтесь бездельем {result[1]} дня(ей)!")
+    else:
+        await message.answer(f"У Вас уже активен отпуск, до окончания {result[1]} дня(ей)!")
+
+
+@dp.message(Command(commands="vacation_status"), ChatTypeFilter([ChatType.GROUP, ChatType.SUPERGROUP]))
+async def cmd_vacation_status(message: Message):
+    if (status := db.vacation_status(message.from_user.id, message.chat.id)) is None:
+        await message.answer("У Вас нет сейчас активного отпуска!")
+    else:
+        await message.answer(f"У Вас осталось {status} дня(ей) до конца отпуска!")
+
+
 @dp.my_chat_member
 async def chat_update(update: ChatMemberUpdated):
     if update.new_chat_member.status == ChatMemberMember.MEMBER:
@@ -336,6 +360,8 @@ async def set_commands():
         BotCommand(command="new_task", description="Выполнение задания"),
         BotCommand(command="status", description="Статус за день/неделю"),
         BotCommand(command="delete", description="Удаление заданий"),
+        BotCommand(command="vacation_add", description="Создать отпуск"),
+        BotCommand(command="vacation_status", description="Статус отпуска"),
     ])
 
 
