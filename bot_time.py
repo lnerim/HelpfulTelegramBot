@@ -13,6 +13,16 @@ class Time:
     end: float
 
 
+@dataclass
+class Period:
+    desc: str
+    rate: int
+
+
+DAY = Period("день", 1)
+WEEK = Period("неделю", 7)
+
+
 def calculate_new_day() -> Time:
     time_now: float = dt.now().timestamp()
     t0: float = time_now % __DAY  # Время в секундах с начала суток

@@ -225,7 +225,7 @@ async def cmd_vacation_add(message: Message):
 
     result = db.vacation_add(message.from_user.id, message.chat.id, days)
     if result[0]:
-        await message.answer(f"Отпуск спешно создан, наслаждайтесь бездельем {result[1]} дня(ей)!")
+        await message.answer(f"Отпуск успешно создан, наслаждайтесь бездельем {result[1]} дня(ей)!")
     else:
         await message.answer(f"У Вас уже активен отпуск, до окончания {result[1]} дня(ей)!")
 
@@ -291,7 +291,7 @@ async def callback_delete(callback: CallbackQuery):
     await callback.answer("Задание удалено!")
 
 
-async def every_time(calc_time: callable, desc: str, rate: int):
+async def every_time(calc_time: callable, period: Period):
     while True:
         t: Time = calc_time()
         await asyncio.sleep(t.sleep)
@@ -303,12 +303,12 @@ async def every_time(calc_time: callable, desc: str, rate: int):
                 users = db.users_by_group(group_id)
 
                 tg.create_task(
-                    group_sender(users, group_id, t.start, t.end, desc, rate)
+                    group_sender(users, group_id, t.start, t.end, period)
                 )
 
 
-async def group_sender(users: tuple, group_id: int, t_start: float, t_end: float, desc: str, rate: int):
-    logging.info(f"Группа {group_id} получает рассылку за {desc}")
+async def group_sender(users: tuple, group_id: int, t_start: float, t_end: float, period: Period):
+    logging.info(f"Группа {group_id} получает рассылку за {period.desc}")
 
     data = []
     for user_id in users:
@@ -327,14 +327,14 @@ async def group_sender(users: tuple, group_id: int, t_start: float, t_end: float
         return
 
     data = sorted(data, key=lambda x: x["value"], reverse=True)
-    data_good, data_bad = cut_list_dicts(data, "value", rate)
+    data_good, data_bad = cut_list_dicts(data, "value", period.rate)
     del data
 
     if data_good:
         top = -1  # Значение точно станет нулём при первой итерации
         remember = 0  # Число точно не встречается
         emoji = ["🥇", "🥈", "🥉", "🎖️"]
-        text_good = f"Список активностей за {desc}\n"
+        text_good = f"Список активностей за {period.desc}\n"
         for elem in data_good:
             # Пример: 🥇 Иван - 10 б.
             if (top < len(emoji) - 1) and (remember != elem["value"]):
@@ -344,8 +344,14 @@ async def group_sender(users: tuple, group_id: int, t_start: float, t_end: float
 
         await bot.send_message(group_id, text_good, parse_mode="HTML")
 
+    # Не считаем за плохих тех, кто в отпуске
+    active_vacation = db.vacation_active(group_id)
+    data_bad = list(filter(lambda x: x["id"] not in active_vacation, data_bad))
+    if period == DAY:
+        db.vacation_decrement(group_id)
+
     if data_bad:
-        text_bad = f"А вот и бездельники за {desc}! Покайтесь и больше так не делайте!\n"
+        text_bad = f"А вот и бездельники за {period.desc}! Покайтесь и больше так не делайте!\n"
         lazybones = ", ".join(
             f"<a href='tg://user?id={elem['id']}'>{elem['name']}</a>" for elem in data_bad
         )
@@ -369,8 +375,8 @@ async def main():
     logging.info("Бот запущен!")
     await set_commands()
     async with asyncio.TaskGroup() as tg:
-        tg.create_task(every_time(calculate_new_day, "день", 1))
-        tg.create_task(every_time(calculate_new_week, "неделю", 7))
+        tg.create_task(every_time(calculate_new_day, DAY))
+        tg.create_task(every_time(calculate_new_week, WEEK))
         tg.create_task(dp.start_polling(bot))
 
 

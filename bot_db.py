@@ -176,9 +176,10 @@ class BotDataBase:
 
     def vacation_active(self, group_id: int) -> tuple[Any]:
         with self.connection:
-            return self.cursor.execute(
-                f"SELECT * FROM `{TABLE_VACATION}` WHERE `{VACATION_GROUP_ID}` = ?", (group_id,)
-            ).fetchone()
+            result = self.cursor.execute(
+                f"SELECT {VACATION_USER_ID} FROM `{TABLE_VACATION}` WHERE `{VACATION_GROUP_ID}` = ?", (group_id,)
+            ).fetchall()
+            return tuple(elem[0] for elem in result)
 
     def vacation_add(self, user_id: int, group_id: int, days: int) -> tuple[bool, int]:
         # True -- добавлено, False - уже существует
