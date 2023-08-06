@@ -52,6 +52,10 @@ async def cmd_help(message: Message):
                          "* /status - Узнать количество набранных баллов за день и неделю\n"
                          "* /new_task - Создание нового задания.\n"
                          "* /mydailywork - То же самое, что и /new_task\n"
+                         "* /delete - Удаление заданий за день, но за неделю этого сделать нельзя\n"
+                         "* /vacation_add - Создать отпуск, "
+                         "если Вам требуется некоторое время не сможете делать полезные дела\n"
+                         "* /vacation_status - Узнать количество дней до конца отпуска\n"
                          "\n"
                          "#️⃣ Хештеги\n"
                          "Помимо команд, бот также воспринимаешь хештеги: `#mydailywork` и `#new_task`.\n"
@@ -214,6 +218,30 @@ async def cmd_delete(message: Message):
     await new_message.delete()
 
 
+@dp.message(Command(commands="vacation_add"), ChatTypeFilter([ChatType.GROUP, ChatType.SUPERGROUP]))
+async def cmd_vacation_add(message: Message):
+    text: list[str] = message.text.split(" ")
+    if len(text) != 2 or not text[1].isdigit() or (days := int(text[1])) <= 0:
+        await message.answer("Некорректный синтаксис.\nНужно:\n"
+                             "/vacation_add <дни отпуска>\n"
+                             "Где дни следует указывать в целых числах")
+        return
+
+    result = db.vacation_add(message.from_user.id, message.chat.id, days)
+    if result[0]:
+        await message.answer(f"Отпуск успешно создан, наслаждайтесь бездельем {result[1]} дня(ей)!")
+    else:
+        await message.answer(f"У Вас уже активен отпуск, до окончания {result[1]} дня(ей)!")
+
+
+@dp.message(Command(commands="vacation_status"), ChatTypeFilter([ChatType.GROUP, ChatType.SUPERGROUP]))
+async def cmd_vacation_status(message: Message):
+    if (status := db.vacation_status(message.from_user.id, message.chat.id)) is None:
+        await message.answer("У Вас нет сейчас активного отпуска!")
+    else:
+        await message.answer(f"У Вас осталось {status} дня(ей) до конца отпуска!")
+
+
 @dp.my_chat_member
 async def chat_update(update: ChatMemberUpdated):
     if update.new_chat_member.status == ChatMemberMember.MEMBER:
@@ -267,7 +295,7 @@ async def callback_delete(callback: CallbackQuery):
     await callback.answer("Задание удалено!")
 
 
-async def every_time(calc_time: callable, desc: str, rate: int):
+async def every_time(calc_time: callable, period: Period):
     while True:
         t: Time = calc_time()
         await asyncio.sleep(t.sleep)
@@ -279,12 +307,12 @@ async def every_time(calc_time: callable, desc: str, rate: int):
                 users = db.users_by_group(group_id)
 
                 tg.create_task(
-                    group_sender(users, group_id, t.start, t.end, desc, rate)
+                    group_sender(users, group_id, t.start, t.end, period)
                 )
 
 
-async def group_sender(users: tuple, group_id: int, t_start: float, t_end: float, desc: str, rate: int):
-    logging.info(f"Группа {group_id} получает рассылку за {desc}")
+async def group_sender(users: tuple, group_id: int, t_start: float, t_end: float, period: Period):
+    logging.info(f"Группа {group_id} получает рассылку за {period.desc}")
 
     data = []
     for user_id in users:
@@ -303,14 +331,14 @@ async def group_sender(users: tuple, group_id: int, t_start: float, t_end: float
         return
 
     data = sorted(data, key=lambda x: x["value"], reverse=True)
-    data_good, data_bad = cut_list_dicts(data, "value", rate)
+    data_good, data_bad = cut_list_dicts(data, "value", period.rate)
     del data
 
     if data_good:
         top = -1  # Значение точно станет нулём при первой итерации
         remember = 0  # Число точно не встречается
         emoji = ["🥇", "🥈", "🥉", "🎖️"]
-        text_good = f"Список активностей за {desc}\n"
+        text_good = f"Список активностей за {period.desc}\n"
         for elem in data_good:
             # Пример: 🥇 Иван - 10 б.
             if (top < len(emoji) - 1) and (remember != elem["value"]):
@@ -320,8 +348,14 @@ async def group_sender(users: tuple, group_id: int, t_start: float, t_end: float
 
         await bot.send_message(group_id, text_good, parse_mode="HTML")
 
+    # Не считаем за плохих тех, кто в отпуске
+    active_vacation = db.vacation_active(group_id)
+    data_bad = list(filter(lambda x: x["id"] not in active_vacation, data_bad))
+    if period == DAY:
+        db.vacation_decrement(group_id)
+
     if data_bad:
-        text_bad = f"А вот и бездельники за {desc}! Покайтесь и больше так не делайте!\n"
+        text_bad = f"А вот и бездельники за {period.desc}! Покайтесь и больше так не делайте!\n"
         lazybones = ", ".join(
             f"<a href='tg://user?id={elem['id']}'>{elem['name']}</a>" for elem in data_bad
         )
@@ -336,6 +370,8 @@ async def set_commands():
         BotCommand(command="new_task", description="Выполнение задания"),
         BotCommand(command="status", description="Статус за день/неделю"),
         BotCommand(command="delete", description="Удаление заданий"),
+        BotCommand(command="vacation_add", description="Создать отпуск"),
+        BotCommand(command="vacation_status", description="Статус отпуска"),
     ])
 
 
@@ -343,8 +379,8 @@ async def main():
     logging.info("Бот запущен!")
     await set_commands()
     async with asyncio.TaskGroup() as tg:
-        tg.create_task(every_time(calculate_new_day, "день", 1))
-        tg.create_task(every_time(calculate_new_week, "неделю", 7))
+        tg.create_task(every_time(calculate_new_day, DAY))
+        tg.create_task(every_time(calculate_new_week, WEEK))
         tg.create_task(dp.start_polling(bot))
 
 
