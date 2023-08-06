@@ -64,20 +64,20 @@ class BotDataBase:
                                 f"{VACATION_GROUP_ID} INTEGER NOT NULL, "
                                 f"{VACATION_DAYS} INTEGER NOT NULL);")
 
-    def group_add(self, group_id, status=True):
+    def group_add(self, group_id: int, status=True):
         with self.connection:
             self.cursor.execute(
                 f"INSERT INTO `{TABLE_GROUPS}` (`{GROUP_ID}`, `{GROUP_STATUS}`) VALUES(?,?)", (group_id, status)
             )
 
-    def group_check(self, group_id) -> bool:
+    def group_check(self, group_id: int) -> bool:
         with self.connection:
             result = self.cursor.execute(
                 f"SELECT * FROM `{TABLE_GROUPS}` WHERE `{GROUP_ID}` = ?", (group_id,)
             ).fetchone()
             return bool(result)
 
-    def group_update(self, group_id, status=True):
+    def group_update(self, group_id: int, status=True):
         with self.connection:
             self.cursor.execute(
                 f"UPDATE `{TABLE_GROUPS}` SET `{GROUP_STATUS}` = ? WHERE `{GROUP_ID}` = ?", (status, group_id)
@@ -89,7 +89,7 @@ class BotDataBase:
                 f"SELECT * FROM `{TABLE_GROUPS}` WHERE `{GROUP_STATUS}` = ?", (status,)
             ).fetchall()
 
-    def task_add(self, user_id, group_id, description, time) -> tuple[int, float]:
+    def task_add(self, user_id: int, group_id: int, description: str, time: float) -> tuple[int, float]:
         with self.connection:
             self.cursor.execute(
                 f"INSERT INTO `{TABLE_TASKS}` "
@@ -98,27 +98,27 @@ class BotDataBase:
             )
             return self.cursor.lastrowid, time
 
-    def task_update(self, task_id, value):
+    def task_update(self, task_id: int, value: int):
         with self.connection:
             self.cursor.execute(
                 f"UPDATE `{TABLE_TASKS}` SET `{TASK_VALUE}` = `{TASK_VALUE}` + ? WHERE `{TASK_NUM}` = ?",
                 (value, task_id)
             )
 
-    def task_get(self, num) -> tuple | None:
+    def task_get(self, num: int) -> tuple | None:
         with self.connection:
             return self.cursor.execute(
                 f"SELECT * FROM `{TABLE_TASKS}` WHERE `{TASK_NUM}` = ?",
                 (num,)
             ).fetchone()
 
-    def task_delete(self, num):
+    def task_delete(self, num: int):
         with self.connection:
             self.cursor.execute(
                 f"DELETE FROM `{TABLE_TASKS}` WHERE `{TASK_NUM}` = ?", (num,)
             )
 
-    def tasks_by_time(self, user_id, group_id, time_start, time_end) -> list[Any]:
+    def tasks_by_time(self, user_id: int, group_id: int, time_start: float, time_end: float) -> list[Any]:
         with self.connection:
             return self.cursor.execute(
                 f"SELECT * FROM `{TABLE_TASKS}` WHERE `{TASK_USER_ID}` = ? AND `{TASK_GROUP_ID}` = ? AND "
@@ -126,7 +126,7 @@ class BotDataBase:
                 (user_id, group_id, time_start, time_end)
             ).fetchall()
 
-    def value_by_time(self, user_id, group_id, time_start, time_end) -> int:
+    def value_by_time(self, user_id: int, group_id: int, time_start: float, time_end: float) -> int:
         with self.connection:
             result = self.cursor.execute(
                 f"SELECT SUM({TASK_VALUE}) FROM `{TABLE_TASKS}` "
@@ -137,7 +137,7 @@ class BotDataBase:
         result = result[0]
         return result if result is not None else 0
 
-    def user_remember(self, user_id, group_id):
+    def user_remember(self, user_id: int, group_id: int):
         with self.connection:
             result = self.cursor.execute(
                 f"SELECT * FROM `{TABLE_USERS}` WHERE `{USER_ID}` = ? AND `{USER_GROUP}` = ?",
@@ -148,34 +148,37 @@ class BotDataBase:
                     f"INSERT INTO `{TABLE_USERS}` (`{USER_ID}`, `{USER_GROUP}`) VALUES(?,?)", (user_id, group_id)
                 )
 
-    def users_by_group(self, group_id) -> tuple[Any]:
+    def users_by_group(self, group_id: int) -> tuple[Any]:
         with self.connection:
             result = self.cursor.execute(
                 f"SELECT {USER_ID} FROM `{TABLE_USERS}` WHERE `{USER_GROUP}` = ?", (group_id,)
             ).fetchall()
             return tuple(elem[0] for elem in result)
 
-    def rep_add(self, num_task, user_id):
+    def rep_add(self, num_task: int, user_id: int):
         with self.connection:
             self.cursor.execute(
                 f"INSERT INTO `{TABLE_REP}` (`{REP_NUM_TASK}`, `{REP_USER_ID}`) VALUES(?,?)", (num_task, user_id)
             )
 
-    def rep_check(self, num_task, user_id) -> bool:
+    def rep_check(self, num_task: int, user_id: int) -> bool:
         with self.connection:
             result = self.cursor.execute(
                 f"SELECT * FROM `{TABLE_REP}` WHERE `{REP_NUM_TASK}` = ? AND `{REP_USER_ID}` = ?", (num_task, user_id)
             ).fetchone()
             return bool(result)
 
-    def rep_delete(self, num_task, user_id):
+    def rep_delete(self, num_task: int, user_id: int):
         with self.connection:
             self.cursor.execute(
                 f"DELETE FROM `{TABLE_REP}` WHERE `{REP_NUM_TASK}` = ? AND `{REP_USER_ID}` = ?", (num_task, user_id)
             )
 
-    def vacation_active(self):
-        ...
+    def vacation_active(self, group_id: int) -> tuple[Any]:
+        with self.connection:
+            return self.cursor.execute(
+                f"SELECT * FROM `{TABLE_VACATION}` WHERE `{VACATION_GROUP_ID}` = ?", (group_id,)
+            ).fetchone()
 
     def vacation_add(self, user_id: int, group_id: int, days: int) -> tuple[bool, int]:
         # True -- добавлено, False - уже существует
@@ -189,8 +192,16 @@ class BotDataBase:
                 return True, days
         return False, status
 
-    def vacation_decrement(self):
-        ...
+    def vacation_decrement(self, group_id: int):
+        with self.connection:
+            self.cursor.execute(
+                f"UPDATE `{TABLE_VACATION}` SET `{VACATION_DAYS}` = `{VACATION_DAYS}` - 1 "
+                f"WHERE `{VACATION_GROUP_ID}` = ?", (group_id,)
+            )
+            self.cursor.execute(
+                f"DELETE FROM `{TABLE_VACATION}` WHERE `{VACATION_GROUP_ID}` = ? AND `{VACATION_DAYS}` <= 0",
+                (group_id,)
+            )
 
     def vacation_status(self, user_id: int, group_id: int) -> int | None:
         with self.connection:
