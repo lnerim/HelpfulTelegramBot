@@ -22,6 +22,11 @@ TABLE_REP = "REPUTATIONS"
 REP_NUM_TASK = "num_task"
 REP_USER_ID = "user_id"
 
+TABLE_VACATION = "VACATION"
+VACATION_USER_ID = "user_id"
+VACATION_GROUP_ID = "group_id"
+VACATION_DAYS = "days"
+
 
 class BotDataBase:
     def __init__(self, name: str = "bot_database.sqlite"):
@@ -52,6 +57,12 @@ class BotDataBase:
             self.cursor.execute(f"CREATE TABLE IF NOT EXISTS {TABLE_REP} ("
                                 f"{REP_NUM_TASK} INTEGER NOT NULL, "
                                 f"{REP_USER_ID} INTEGER NOT NULL);")
+
+        with self.connection:
+            self.cursor.execute(f"CREATE TABLE IF NOT EXISTS {TABLE_VACATION} ("
+                                f"{VACATION_USER_ID} INTEGER NOT NULL, "
+                                f"{VACATION_GROUP_ID} INTEGER NOT NULL, "
+                                f"{VACATION_DAYS} INTEGER NOT NULL);")
 
     def group_add(self, group_id, status=True):
         with self.connection:
@@ -162,6 +173,30 @@ class BotDataBase:
             self.cursor.execute(
                 f"DELETE FROM `{TABLE_REP}` WHERE `{REP_NUM_TASK}` = ? AND `{REP_USER_ID}` = ?", (num_task, user_id)
             )
+
+    def vacation_add(self, user_id: int, group_id: int, days: int) -> tuple[bool, int]:
+        # True -- добавлено, False - уже существует
+        if (status := self.vacation_status(user_id, group_id)) is None:
+            with self.connection:
+                self.cursor.execute(
+                    f"INSERT INTO `{TABLE_VACATION}` "
+                    f"(`{VACATION_USER_ID}`, `{VACATION_GROUP_ID}`, `{VACATION_DAYS}`) VALUES(?,?,?)",
+                    (user_id, group_id, days)
+                )
+                return True, days
+        return False, status
+
+    def vacation_decrement(self):
+        ...
+
+    def vacation_status(self, user_id: int, group_id: int) -> int | None:
+        with self.connection:
+            result = self.cursor.execute(
+                f"SELECT {VACATION_DAYS} FROM `{TABLE_VACATION}` "
+                f"WHERE `{VACATION_USER_ID}` = ? AND `{VACATION_GROUP_ID}` = ?",
+                (user_id, group_id)
+            ).fetchone()
+            return result[0] if result is not None else None
 
 
 if __name__ == '__main__':
