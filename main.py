@@ -389,9 +389,10 @@ async def main():
     logging.info("Бот запущен!")
     await set_commands()
     async with asyncio.TaskGroup() as tg:
-        tg.create_task(every_time(calculate_new_day, DAY))
-        tg.create_task(every_time(calculate_new_week, WEEK))
-        tg.create_task(dp.start_polling(bot))
+        task1 = tg.create_task(every_time(calculate_new_day, DAY))
+        task2 = tg.create_task(every_time(calculate_new_week, WEEK))
+        task3 = tg.create_task(dp.start_polling(bot))
+        task3.add_done_callback(lambda _: (task1.cancel(), task2.cancel()))
 
 
 if __name__ == "__main__":
