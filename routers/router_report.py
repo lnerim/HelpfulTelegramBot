@@ -95,6 +95,10 @@ async def report_messages(message: Message):
         new_task = (percent, task_desc)
         normalize_task.append(new_task)
 
+    # TODO Проверить везде деление на ноль
+    if len(normalize_task) == 0:
+        return
+
     for t in normalize_task:
         await db.add_record(message.from_user.id, t[0], t[1])
 
