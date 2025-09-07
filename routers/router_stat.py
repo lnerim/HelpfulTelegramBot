@@ -3,8 +3,10 @@ from asyncio import sleep
 
 from aiogram import Router, F
 from aiogram.types import Message
+from aiogram.filters import Command
 
 from config import TOPIC_STAT, SUPERGROUP_ID
+from timers.timer_stat_day import timer_stat_day
 
 router = Router()
 
@@ -19,3 +21,9 @@ async def stat_messages(message: Message):
     msg = await message.bot.send_message(message.chat.id, "Тут нельзя писать, только статистика", message_thread_id=TOPIC_STAT)
     await sleep(3)
     await msg.delete()
+
+@router.message(Command("testday"))
+async def testday(message: Message):
+    await timer_stat_day()
+
+

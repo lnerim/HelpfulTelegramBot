@@ -6,11 +6,12 @@ from aiogram.types import Message
 
 from config import SUPERGROUP_ID, TOPIC_REPORT, HASHTAG_TASK, db
 from hashtag_filter import HashtagFilter
+from send_stat_now import send_stat_now
 
 router = Router()
 
 
-@router.message(Command("help"), F.chat.id == SUPERGROUP_ID, F.message_thread_id == TOPIC_REPORT)
+@router.message(Command("help"))
 async def report_messages(message: Message):
     msg = await message.answer(
         "Синтаксис\n"
@@ -19,6 +20,7 @@ async def report_messages(message: Message):
         "- Невыполненная задача\n"
         "+ Выполненная задача\n"
         "%10/500 Процентная задача\n"
+        "%32% Задача с готовым процентом\n"
         "=\n"
         "Описание(опционально)\n"
         "\n"
@@ -79,15 +81,30 @@ async def report_messages(message: Message):
             case "+":
                 percent = 1.0
             case o if o.startswith("%"):
-                nums = task_op[1:].split("/")
-                if len(nums) != 2:
-                    await message.answer(f"Неправильное количество чисел >{task}<")
+                body = o[1:]  # всё после первого %
+                if "/" in body:  # вариант %3/5
+                    nums = body.split("/")
+                    if len(nums) != 2:
+                        await message.answer(f"Неправильное количество чисел >{task}<")
+                        return
+                    try:
+                        first, second = int(nums[0]), int(nums[1])
+                        if second == 0:
+                            await message.answer(f"Деление на ноль в задаче >{task}<")
+                            return
+                        percent = first / second
+                    except ValueError:
+                        await message.answer(f"Числа не распознаны >{task}<")
+                        return
+                elif body.endswith("%"):  # вариант %51%
+                    num = body[:-1]  # убрать последний %
+                    if not num.isdigit():
+                        await message.answer(f"Число не распознано >{task}<")
+                        return
+                    percent = int(num) / 100
+                else:
+                    await message.answer(f"Формат процента не распознан >{task_op}<")
                     return
-                # Вроде на float тоже работает, не проверял, пусть так
-                elif not ((first := nums[0]).isdigit() and (second := nums[1]).isdigit()):
-                    await message.answer(f"Числа не распознаны >{task}<")
-                    return
-                percent = int(first) / int(second)
             case _:
                 await message.answer(f"Нет такого оператора >{task_op}<")
                 return
@@ -101,6 +118,8 @@ async def report_messages(message: Message):
 
     for t in normalize_task:
         await db.add_record(message.from_user.id, t[0], t[1])
+
+    await send_stat_now(message)
 
     msg = await message.reply(f"Общий процент за день {sum(map(lambda x: x[0], normalize_task)) / len(normalize_task) * 100:.2f}%")
     await sleep(3)

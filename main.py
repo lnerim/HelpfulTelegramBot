@@ -20,6 +20,5 @@ async def main():
         tg.create_task(every_day_at(21, 00, timer_alarm))
         tg.create_task(dp.start_polling(bot))
 
-
 if __name__ == "__main__":
     asyncio.run(main())
